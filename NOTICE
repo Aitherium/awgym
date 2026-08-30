@@ -1,0 +1,12 @@
+awgym
+Copyright 2026 Aitherium
+
+This product imports at runtime the "DreamTeam" ARC-AGI-3 solver
+(https://github.com/NVIDIA/dream-team), Copyright NVIDIA Corporation,
+licensed under the Apache License, Version 2.0. The vendored tree lives at
+ARC_GYM_DREAMTEAM_ROOT (default E:\AitherOS-Data\arc-agi-3\dream-team) and is
+not redistributed by this package. The upstream NOTICE and
+THIRD_PARTY_NOTICES are retained with the vendored tree.
+
+Source commit recorded at vendoring time: see
+E:\AitherOS-Data\arc-agi-3\dream-team (zip: dream-team-main.zip, 2026-08-30).

@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "awgym"
+version = "0.1.0"
+description = "An ARC training gym — a game a world model can watch, and six roles that play through it. Wraps the vendored NVIDIA dream-team ARC-AGI-3 solver seams (ARCAGI3Env + RHAE) and drives the LeWM world-model service through its HTTP API."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Apache-2.0" }
+# gym core talks HTTP to LeWM (:8197) and imports the VENDORED dream-team tree
+# at runtime (ARC_GYM_DREAMTEAM_ROOT) — the monorepo never carries that code.
+dependencies = [
+    "httpx>=0.27",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "pyyaml>=6.0",
+    "arc-agi>=0.9.8",
+    "arcengine>=0.9.3",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+awgym = "awgym.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/Aitherium/awgym"
+Repository = "https://github.com/Aitherium/awgym.git"
+
+[tool.setuptools]
+packages = ["awgym", "awgym.vendor", "awgym.envs", "awgym.gym", "awgym.wm", "awgym.evals", "awgym.serve", "awgym.solver"]
+license-files = ["LICENSE"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"

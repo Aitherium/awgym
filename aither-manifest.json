@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "1",
+  "name": "awgym",
+  "description": "An ARC training gym — a game a world model can watch.",
+  "url": "https://aitherium.github.io/awgym/",
+  "repository": "https://github.com/Aitherium/awgym",
+  "kind": "tool",
+  "status": "public",
+  "adopt": "Run an ARC training gym your world model can watch and learn from.",
+  "pairs_with": [
+    "awresearch",
+    "awreason",
+    "awgraph"
+  ],
+  "includes": []
+}

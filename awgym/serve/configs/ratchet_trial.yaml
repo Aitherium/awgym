@@ -1,0 +1,15 @@
+# awgym ratchet trial surface — the ONE file a trial may change.
+# A trial tunes these knobs; the scorer, the eval slice and the harness
+# definition live OUTSIDE this file (AVO006). is_available() = this file
+# exists; the harness records the config sha in the trial lineage so a
+# no-op trial (no change to these values) is refused by the ratchet.
+#
+# CPU-only: the LeWM service trains on CPU (~2.4 s/step); GPU training of
+# the unfrozen model OOMs on this host's SIGReg (measured 2026-08-29).
+
+game_pool: default            # default = the full scanned pool
+burst_steps: 200              # steps per /train burst
+min_burst_interval_s: 60      # throttle between bursts (live lane shares the WM)
+eval_episodes: 2              # episodes per eval game
+eval_steps: 10                # steps per eval episode
+eval_seed: 0                  # deterministic rotation into the eval slice

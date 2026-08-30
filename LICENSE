@@ -1,0 +1,8 @@
+Apache License 2.0 — awgym.
+
+This package wraps the vendored NVIDIA dream-team ARC-AGI-3 solver
+(https://github.com/NVIDIA/dream-team, Apache-2.0), which is imported at
+runtime from ARC_GYM_DREAMTEAM_ROOT and is NOT redistributed inside this
+package. Its NOTICE and THIRD_PARTY_NOTICES live with the vendored tree.
+
+Full Apache-2.0 text: https://www.apache.org/licenses/LICENSE-2.0
