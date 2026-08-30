@@ -18,6 +18,11 @@ dependencies = [
     "pyyaml>=6.0",
     "arc-agi>=0.9.8",
     "arcengine>=0.9.3",
+    # The VENDORED dream-team tree requires loguru at import
+    # (beam/logging/core.py) — without it every env-using command dies with
+    # ModuleNotFoundError in a fresh install. Present on dev hosts only by
+    # transitivity; the image proved the absence 2026-08-30.
+    "loguru>=0.7",
 ]
 
 [project.optional-dependencies]

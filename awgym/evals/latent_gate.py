@@ -50,8 +50,11 @@ def gate_skill(transitions: list[Transition],
     lewm_vals: list[float] = []
     id_vals: list[float] = []
     for t in transitions:
+        # NO ctx: the WM's SurpriseReq.ctx is Optional[List[float]] (a
+        # conditioning vector), not a game key — passing the game id string
+        # 422s every call (measured 2026-08-30 on the acceptance score run).
         s = surprise_fn(t) if surprise_fn else client.surprise(
-            t.grid, t.action, t.next_grid, ctx=t.game_id)
+            t.grid, t.action, t.next_grid)
         if s is None:
             continue
         ident = identity_surprise(t, client)

@@ -49,13 +49,17 @@ def compute_skill(client: LeWMClient) -> Optional[dict]:
     return gate_skill(transitions, client)
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    """argv param: the CLI's `awgym score` subparser owns its own flags, so
+    cmd_score re-invokes this entry point with a rebuilt argv (measured
+    2026-08-30: passing the argparse.Namespace through blew up with
+    "main() takes 0 positional arguments")."""
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--strict", action="store_true",
                     help="exit non-zero when no metric could be computed")
     ap.add_argument("--base", default=os.environ.get("ARC_GYM_LEWM_BASE"))
     ap.add_argument("--ca", default=os.environ.get("ARC_GYM_LEWM_CA"))
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
     client = LeWMClient(base=args.base, ca=args.ca, timeout=30.0)
     try:

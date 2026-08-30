@@ -1,0 +1,43 @@
+# The awgym gym service image — the only write surface of the training loop.
+# Container-hosted on the fleet network; reaches LeWM in-network
+# (https://aitheros-world-model:8197) with the fleet internal CA, exactly the
+# path the live playground uses.
+#
+# The vendored NVIDIA dream-team tree (Apache-2.0, NOTICE retained) is copied
+# in UNTOUCHED from the data drive — the monorepo never carries it.
+#
+# Build context = the staging dir on the DATA drive, which carries
+# dream-team/ (the vendored tree) + awgym-src/ (this package), e.g.:
+#   E:\AitherOS-Data\arc-agi-3\awgym-build\
+#       dream-team\      <- the vendored tree (E:\...\dream-team)
+#       awgym-src\       <- this package dir (C:\...\packages\awgym)
+# A COPY out of the build context is forbidden by Dockerfile semantics, and
+# the monorepo never carries the vendored tree, so the staging dir is the
+# seam. It is build material on the builds plane — re-fetchable, disposable.
+FROM python:3.12-slim
+
+# dream-team's import chain needs a few system bits (uvloop/grpcio wheels are
+# manylinux; langgraph chain runs pure-python after our shim stubs it)
+RUN apt-get update && apt-get install -y --no-install-recommends curl && \
+    rm -rf /var/lib/apt/lists/*
+
+# the vendored solver seams (ARCAGI3Env + rhae + the generated games)
+COPY dream-team /app/dream-team
+
+# The tree's OWN pyproject IS the contract for its import chain: arc_agi_3
+# imports beam, which imports tqdm/loguru/matplotlib/... transitively, so
+# installing /app/dream-team as a package pulls exactly the deps the seams
+# need (the langgraph chain included — inside this container it installs
+# cleanly; the dev-host langgraph stub never fires here). Measured 2026-08-30:
+# a hand-maintained subset (loguru only) died on tqdm two imports later.
+COPY awgym-src /app/awgym-src
+RUN pip install --no-cache-dir /app/dream-team && \
+    pip install --no-cache-dir /app/awgym-src
+
+ENV ARC_GYM_DREAMTEAM_ROOT=/app/dream-team \
+    ARC_GYM_LEWM_BASE=https://aitheros-world-model:8197 \
+    ARC_GYM_LEWM_CA=/etc/tls/ca-bundle.pem \
+    PYTHONIOENCODING=utf-8
+
+EXPOSE 8199
+ENTRYPOINT ["awgym", "serve", "--port", "8199"]

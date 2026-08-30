@@ -14,11 +14,15 @@ from __future__ import annotations
 import os
 
 DEFAULT_EVAL_GAMES = [
+    # All five are in the vendored dream-team generated pool (measured
+    # 2026-08-30) — the container bakes ONLY that set, and resolve_eval_games
+    # fails LOUD on an absent id, so an SDK-game id here would kill every
+    # in-container `awgym score` run.
     "cc2048-f080c4af",
     "cg1842-e7600c9f",
     "cl0426-c5dfa3ac",
-    "cn04-2fe56bfb",
-    "bp35-0a0ad940",
+    "df4821-818c2c5e",
+    "dl4827-b8768101",
 ]
 
 EVAL_GAMES_ENV = "ARC_GYM_EVAL_GAMES"

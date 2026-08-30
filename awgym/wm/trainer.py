@@ -76,7 +76,18 @@ class Trainer:
                 raise KeyError(f"games not in pool: {missing}")
             games = [pool[g] for g in game_ids]
         else:
-            games = sorted(pool.values(), key=lambda g: g.game_id)
+            # The eval slice is DISJOINT BY CONSTRUCTION: never observe its
+            # games, or the holdout is contaminated and the metric is gamed by
+            # memorization (the eval_slice docstring's whole point). Explicit
+            # --games overrides on purpose — a caller naming an eval game is
+            # making a deliberate choice.
+            eval_ids = set(resolve_eval_games(pool))
+            games = [g for g in sorted(pool.values(),
+                                       key=lambda g: g.game_id)
+                     if g.game_id not in eval_ids]
+            if not games:
+                raise KeyError("no trainable games outside the eval slice — "
+                               "pool is entirely eval games")
         rows: list[dict] = []
         observed = 0
         for i in range(n):
