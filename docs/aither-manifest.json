@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "1",
+  "name": "awgym",
+  "description": "An ARC training gym — a game a world model can watch, and six roles that play through it.",
+  "url": "https://aitherium.github.io/awgym/",
+  "repository": "https://github.com/Aitherium/awgym",
+  "kind": "runtime",
+  "status": "public",
+  "adopt": "Play one ARC game end-to-end with the world model watching every transition, then ask it to predict the next grid and watch the surprise score fall.",
+  "pairs_with": [
+    "awdk",
+    "awm",
+    "awrelay",
+    "awgit",
+    "awgraph",
+    "awfocus",
+    "awrun"
+  ],
+  "includes": [],
+  "metrics": {
+    "files": {
+      "value": 44,
+      "as_of": "2026-09-02T16:28:20-07:00"
+    },
+    "tests": {
+      "value": 4,
+      "as_of": "2026-09-02T16:28:20-07:00"
+    }
+  }
+}
