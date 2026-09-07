@@ -5,6 +5,7 @@ queue entry."""
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -42,7 +43,14 @@ def test_queued_solve_item_is_claimed_played_and_journaled(tmp_path: Path):
     eps = list((tmp_path / "solve").glob("*/ep-*/journal.jsonl"))
     assert len(eps) == 1
     ok, n, _ = EpisodeJournal(eps[0].parent).verify()
-    assert ok and n == 5  # 3 transitions + attempt + outcome
+    assert ok and n == 6  # policy provenance + 3 transitions + attempt + outcome
+    kinds = EpisodeJournal(eps[0].parent).kinds()
+    assert kinds.get("policy") == 1  # the journal says WHICH policy played
+    # state.json must agree with the chain AFTER the provenance row, or the gate
+    # (check_solver_loop_closes SLC001) reads an honest episode as tampered.
+    ok, n, head = EpisodeJournal(eps[0].parent).verify()
+    state = json.loads((eps[0].parent / "state.json").read_text(encoding="utf-8"))
+    assert state["rows"] == n and state["hash"] == head, state
 
 
 def test_reverted_and_refused_map_to_exit_codes(tmp_path: Path):

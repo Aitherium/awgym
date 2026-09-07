@@ -58,7 +58,21 @@ def _policy_from(item_spec: dict):
     if name == "random":
         seed = item_spec.get("seed")
         return random_policy(int(seed) if seed is not None else None)
-    raise ProblemError(f"unknown policy {name!r} (random|const)")
+    if name == "layered":
+        # ARC-middle layers as policies: {"kind": "layered", "layers": [...],
+        # "council": {...}, "fallback": {...}} -- see awgym.gym.policies.
+        # Imported lazily so a malformed description REFUSES the item (code 2)
+        # rather than failing the worker at boot.
+        from .policies import load_policy
+
+        desc = item_spec.get("policy_spec")
+        if not isinstance(desc, dict):
+            raise ProblemError("layered policy needs item_spec.policy_spec = desc")
+        try:
+            return load_policy(desc)
+        except ValueError as exc:
+            raise ProblemError(f"layered policy malformed: {exc}") from exc
+    raise ProblemError(f"unknown policy {name!r} (random|const|layered)")
 
 
 def run_solve(item: Any, *, run_root: Optional[Path] = None) -> Tuple[int, str]:
@@ -89,6 +103,21 @@ def run_solve(item: Any, *, run_root: Optional[Path] = None) -> Tuple[int, str]:
         ep = session.run()
     except Exception as exc:  # noqa: BLE001 - the loop itself guards steps; this is the rest
         return 2, f"run crashed: {type(exc).__name__}: {exc}"
+    # Policy provenance: the journal must be able to answer "which policy played
+    # this episode?" -- a layered run and a random run that both scored zero are
+    # different facts. Appended after the run (the journal inits at run start).
+    try:
+        provenance = {"policy": str(raw.get("policy") or "random")}
+        if isinstance(raw.get("policy_spec"), dict):
+            provenance["spec"] = {k: v for k, v in raw["policy_spec"].items()
+                                  if k != "wm"}
+        session.journal.append("policy", provenance)
+        # session.run() already closed the journal (state.json = rows/head BEFORE this
+        # row). Re-close, or every awrun-played episode reads as "truncated or edited"
+        # to SLC001 -- measured 2026-09-06 on 2 of 4 seed episodes.
+        session.journal.close(session.episode_id)
+    except Exception as exc:  # noqa: BLE001 - an unwritable journal is a defect
+        return 2, f"policy provenance failed: {type(exc).__name__}: {exc}"
     out = ep.outcome
     if out is None or out.refusal is not None:
         return 2, ep.summary()
