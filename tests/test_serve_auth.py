@@ -8,7 +8,6 @@ module import, so these tests reload serve.app under a fresh env.
 
 import importlib
 
-
 KEY = "test-internal-key-123"
 
 
@@ -57,3 +56,19 @@ def test_reads_are_open(monkeypatch):
         r = c.get("/gym/games")
         assert r.status_code == 200
         assert "games" in r.json()
+
+
+def test_score_run_is_a_write_surface(monkeypatch):
+    """/gym/score-run spawns the eval (play + WM calls) — the harness scorer
+    runs HERE, so it shares the write-path auth: unconfigured = 503, wrong
+    key = 401 (measured 2026-08-30: the ratchet's host can reach neither the
+    vendored tree nor the WM, so the endpoint is the only honest place)."""
+    from fastapi.testclient import TestClient
+    app = _app(monkeypatch, None)
+    with TestClient(app) as c:
+        r = c.post("/gym/score-run")
+        assert r.status_code == 503
+    app = _app(monkeypatch, KEY)
+    with TestClient(app) as c:
+        r = c.post("/gym/score-run", headers={"X-Internal-Token": "wrong"})
+        assert r.status_code == 401

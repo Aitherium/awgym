@@ -64,17 +64,29 @@ def get_parser() -> argparse.ArgumentParser:
     sp.add_argument("--port", type=int, default=8199)
     _client_args(sp)
     sp.set_defaults(func=cmd_serve)
+
+    sp = sub.add_parser("solve", help="solver league: leader rounds -> played "
+                                      "steps -> LeWM observations -> ledger")
+    sp.add_argument("--game", help="game id (default: first by id in the pool)")
+    sp.add_argument("--rounds", type=int, default=5)
+    sp.add_argument("--max-steps", type=int, default=60)
+    sp.add_argument("--simulator", choices=["lewm", "stub"], default="lewm",
+                    help="the A/B lever: lewm = the neural world model, "
+                         "stub = identity/copy predictions")
+    _client_args(sp)
+    sp.set_defaults(func=cmd_solve)
     return p
 
 
 def cmd_play(args: argparse.Namespace) -> int:
+    from .config import data_root
     from .envs.games import pick_game
     from .gym.orchestrator import GameSession
     from .gym.recording import Recorder
-    from .config import data_root
     _quiet_import_noise()  # the vendored import chain adds loguru sinks — re-silence
 
     game = pick_game(args.game)
+    # curious policy needs a client — wire lazily
     from .wm.lewm_client import LeWMClient
     from .wm.trainer import Trainer
     if args.policy == "curious":
@@ -134,8 +146,33 @@ def cmd_status(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_solve(args: argparse.Namespace) -> int:
+    """The solver league: leader rounds -> played steps -> LeWM training.
+
+    Runs in THIS process (the CLI is the league's driver; the gym service
+    hosts the shared surfaces). The outcome lands in the gym ledger with
+    kind=solve and an end-of-run findings card on the relay.
+    """
+    from .solver.findings import post_findings
+    from .solver.leader import run_solve
+    from .wm.lewm_client import LeWMClient
+
+    _quiet_import_noise()
+    client = LeWMClient(base=args.base, ca=args.ca)
+    outcome = run_solve(args.game, rounds=args.rounds,
+                        max_steps=args.max_steps,
+                        simulator=args.simulator, client=client)
+    print(f"solve {outcome['game_id']}: {outcome['rounds']} rounds, "
+          f"{outcome['steps']} steps, "
+          f"mean surprise {outcome.get('mean_surprise', 'n/a')}")
+    print(f"final hypothesis: {outcome.get('hypothesis') or 'none'}")
+    post_findings(outcome["game_id"], outcome["run_id"], outcome)
+    return 0
+
+
 def cmd_serve(args: argparse.Namespace) -> int:
     import uvicorn
+
     from .serve.app import create_app
 
     # In-network convention: every service speaks TLS with the shared internal
@@ -174,6 +211,20 @@ def _quiet_import_noise() -> None:
 
 
 def main() -> int:
+    # GENERATED doctor intercept (gen_aw_doctor.py) -- do not edit
+    _dv = locals().get("argv")
+    if (_dv if _dv is not None else __import__("sys").argv[1:])[:1] == ["doctor"]:
+        from ._doctor import report
+        return report()
+    # GENERATED repo-state intercept (gen_aw_doctor.py) -- do not edit
+    try:
+        from awgit import state as _aw_state
+    except Exception:
+        _aw_state = None
+    if _aw_state is not None:
+        _sv = locals().get("argv")
+        if _aw_state.cli_banner(_sv if _sv is not None else __import__("sys").argv[1:]):
+            return 0
     _quiet_import_noise()
     args = get_parser().parse_args()
     if not getattr(args, "func", None):

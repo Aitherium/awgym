@@ -5,6 +5,11 @@ pattern: the loop never runs inside the gateway's request process). The
 service is container-hosted on the shared network; it reaches LeWM
 in-network (its service name on the shared network) with the internal CA.
 It carries ARC_GYM_LEWM_TOKEN from its env for writes.
+Genesis proxies verbatim to this service (the idle_jobs_proxy pattern, D-818:
+the loop never runs inside genesis' request process). The service is
+container-hosted on the fleet network; it reaches LeWM in-network
+(https://aitheros-world-model:8197) with the internal CA — the same path the
+live playground uses. It carries ARC_GYM_LEWM_TOKEN from its env for writes.
 
 Endpoints mirror what the portal panel and MCP tools consume:
   GET  /gym/games          pool listing
@@ -37,6 +42,10 @@ _RUNS: dict[str, dict[str, Any]] = {}
 # (provisioned 2026-08-30, fail-open fixed). The gym service must NOT inherit
 # that fail-open class on its own write surfaces: /gym/runs (spawns game
 # sessions — CPU/LLM cost) and /gym/train (drives the shared WM) require the
+# fleet internal key (AITHER_INTERNAL_SECRET, accepted as X-Internal-Key or
+# X-Internal-Token — but the genesis /gym proxy forwards ONLY x-internal-token,
+# measured 2026-08-30, so callers through genesis must use that spelling).
+# Unset = FAIL-CLOSED: writes are refused with 503, never silently accepted.
 # fleet internal key (AITHER_INTERNAL_SECRET, sent as X-Internal-Key /
 # X-Internal-Token — the genesis proxy forwards both). Unset = FAIL-CLOSED:
 # writes are refused with 503, never silently accepted.
@@ -141,5 +150,97 @@ def create_app(base: Optional[str] = None, ca: Optional[str] = None) -> FastAPI:
             "mean_surprise_identity": result["mean_surprise_identity"],
             "refused": result["skill"] <= 0.0,
         }
+
+    # Phase 2 — the solver league's simulator surface. The six role packs
+    # (Library/packs/awgym/roles/*) declare wm_* MCP tools that proxy here;
+    # this surface is the SINGLE door to LeWM for the league (the plan's
+    # "simulator role's tool surface is the LeWM HTTP API"). The simulator
+    # backend is a config flag (ARC_GYM_SIMULATOR_BACKEND = lewm | stub):
+    # the stub answers with identity/copy predictions so the league loop can
+    # A/B the neural simulator against a no-knowledge baseline (accept (d)).
+    # Reads are open; writes (/observe /train /save) are internal-key gated
+    # like the other write surfaces.
+    sim_backend = os.environ.get("ARC_GYM_SIMULATOR_BACKEND", "lewm").lower()
+
+    def _sim(name: str, *args: Any, **kwargs: Any) -> dict:
+        """Dispatch one LeWM call, or the stub's identity answer."""
+        if sim_backend == "stub":
+            stub = {
+                "health": {"ok": True, "backend": "stub"},
+                "dataset": {"count": 0, "backend": "stub"},
+                "encode": {"z": [0.0] * 8192, "backend": "stub"},
+                "predict": {"z": (args[0] if args else kwargs.get("z")
+                                  or []), "backend": "stub"},
+                "surprise": {"surprise": 0.0, "backend": "stub"},
+                "decode": {"grid": [[0] * 4] * 4, "backend": "stub"},
+                "probe": {"novelty": 0.0, "backend": "stub"},
+                "value": {"value": 0.0, "backend": "stub"},
+                "observe": {"ok": True, "backend": "stub"},
+                "train": {"result": "stub-burst", "backend": "stub"},
+                "save": {"ok": True, "backend": "stub"},
+            }
+            return stub.get(name, {"backend": "stub"})
+        return getattr(client, name)(*args, **kwargs)
+
+    @app.get("/gym/wm/health")
+    def wm_health() -> dict:
+        return _sim("health")
+
+    @app.get("/gym/wm/dataset")
+    def wm_dataset() -> dict:
+        return _sim("dataset")
+
+    @app.post("/gym/wm/encode")
+    def wm_encode(payload: dict) -> dict:
+        return _sim("encode", payload.get("grid"),
+                    cond=payload.get("cond"))
+
+    @app.post("/gym/wm/predict")
+    def wm_predict(payload: dict) -> dict:
+        return _sim("predict", payload.get("z"),
+                    action=int(payload.get("action", 0)),
+                    ctx=payload.get("ctx"))
+
+    @app.post("/gym/wm/surprise")
+    def wm_surprise(payload: dict) -> dict:
+        return _sim("surprise", payload.get("grid"),
+                    action=int(payload.get("action", 0)),
+                    next_grid=payload.get("next_grid"))
+
+    @app.post("/gym/wm/decode")
+    def wm_decode(payload: dict) -> dict:
+        return _sim("decode", payload.get("z"))
+
+    @app.post("/gym/wm/probe")
+    def wm_probe(payload: dict) -> dict:
+        return _sim("probe", payload.get("grid"),
+                    cond=payload.get("cond"))
+
+    @app.post("/gym/wm/value")
+    def wm_value(payload: dict) -> dict:
+        return _sim("value", payload.get("grid"))
+
+    @app.post("/gym/wm/observe")
+    def wm_observe(payload: dict,
+                   x_internal_key: Optional[str] = Header(default=None),
+                   x_internal_token: Optional[str] = Header(default=None)) -> dict:
+        _require_internal_key(x_internal_key, x_internal_token)
+        return _sim("observe", payload.get("grid"),
+                    action=int(payload.get("action", 0)),
+                    next_grid=payload.get("next_grid"))
+
+    @app.post("/gym/wm/train")
+    def wm_train(payload: dict,
+                 x_internal_key: Optional[str] = Header(default=None),
+                 x_internal_token: Optional[str] = Header(default=None)) -> dict:
+        _require_internal_key(x_internal_key, x_internal_token)
+        return _sim("train", int(payload.get("steps") or 100))
+
+    @app.post("/gym/wm/save")
+    def wm_save(payload: dict,
+                x_internal_key: Optional[str] = Header(default=None),
+                x_internal_token: Optional[str] = Header(default=None)) -> dict:
+        _require_internal_key(x_internal_key, x_internal_token)
+        return _sim("save", payload.get("path") or "")
 
     return app

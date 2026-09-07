@@ -24,9 +24,10 @@ import sys
 import httpx
 
 _GYM_URL = os.environ.get("ARC_GYM_SCORE_URL",
-                          "http://127.0.0.1:8199/gym/score-run")
+                          "https://aitheros-gym:8199/gym/score-run")
 _CA_CANDIDATES = (
     "SSL_CERT_FILE",
+    "/app/AitherOS/Library/Data/tls/combined-ca-bundle.pem",
     "/etc/tls/ca-bundle.pem",
     "/certs/ca-chain.pem",
 )
