@@ -136,6 +136,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument("--worker-id", default=f"awgym-solve-{os.getpid()}")
     ap.add_argument("--once", action="store_true", help="claim at most one item, then exit")
     ap.add_argument("--poll", type=float, default=5.0)
+    ap.add_argument("--pidfile", default=None,
+                    help="write this process id here (the hidden-task launcher guards on it)")
     args = ap.parse_args(argv)
     try:
         from awrun.dispatcher import _RUN_FNS, dispatch_once, run_forever
@@ -149,6 +151,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     root = Path(args.root) if args.root else None
     fns = dict(_RUN_FNS)
     fns[SOLVE_KIND] = lambda item: run_solve(item, run_root=root)
+    if args.pidfile:
+        Path(args.pidfile).parent.mkdir(parents=True, exist_ok=True)
+        Path(args.pidfile).write_text(str(os.getpid()), encoding="utf-8")
     if args.once:
         item = dispatch_once(store, worker_id=args.worker_id, run_fns=fns)
         print(json.dumps({"claimed": bool(item), "id": getattr(item, "id", None),
