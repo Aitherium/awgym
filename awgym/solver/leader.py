@@ -34,7 +34,13 @@ log = logging.getLogger("awgym.solver")
 _MS_URL = os.environ.get(
     "ARC_GYM_LEADER_LLM",
     "https://aitheros-microscheduler:8150/v1/chat/completions")
-_LEADER_MODEL = os.environ.get("ARC_GYM_LEADER_MODEL", "aither-orchestrator")
+# No default, and that is the point: the value that lived here was one of OUR
+# serving names, and this package ships to PyPI. A published brick must not
+# advertise which models we run (AWM005) -- it is not a credential, it is the
+# shape of the platform. Nothing in the repo set this variable, so the literal
+# WAS the value; it is now supplied by whoever runs the solver, and its absence
+# fails loudly in _leader_call rather than dialling a model that may not exist.
+_LEADER_MODEL = os.environ.get("ARC_GYM_LEADER_MODEL", "")
 _INTERNAL_KEY = os.environ.get("AITHER_INTERNAL_SECRET") or os.environ.get(
     "AITHER_INTERNAL_SECRET_PREVIOUS") or ""
 
@@ -54,6 +60,11 @@ def _leader_call(system: str, context: str, timeout: float = 300.0) -> str:
     """One leader LLM call through MicroScheduler (fail-closed)."""
     if not _INTERNAL_KEY:
         raise RuntimeError("AITHER_INTERNAL_SECRET unset — leader LLM refused")
+    if not _LEADER_MODEL:
+        raise RuntimeError(
+            "ARC_GYM_LEADER_MODEL unset — leader LLM refused. Set it to the "
+            "model name your endpoint serves; there is no default."
+        )
     payload = {
         "model": _LEADER_MODEL,
         "messages": [

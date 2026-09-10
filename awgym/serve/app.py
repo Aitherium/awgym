@@ -5,8 +5,8 @@ pattern: the loop never runs inside the gateway's request process). The
 service is container-hosted on the shared network; it reaches LeWM
 in-network (its service name on the shared network) with the internal CA.
 It carries ARC_GYM_LEWM_TOKEN from its env for writes.
-Genesis proxies verbatim to this service (the idle_jobs_proxy pattern, D-818:
-the loop never runs inside genesis' request process). The service is
+Genesis proxies verbatim to this service (the idle_jobs_proxy pattern: the
+loop never runs inside genesis' request process). The service is
 container-hosted on the fleet network; it reaches LeWM in-network
 (https://aitheros-world-model:8197) with the internal CA — the same path the
 live playground uses. It carries ARC_GYM_LEWM_TOKEN from its env for writes.
