@@ -12,6 +12,9 @@ license = { text = "Apache-2.0" }
 # gym core talks HTTP to LeWM (:8197) and imports the VENDORED dream-team tree
 # at runtime (ARC_GYM_DREAMTEAM_ROOT) — the monorepo never carries that code.
 dependencies = [
+    # The Problem contract (ProblemSpec/Scorer/Transition/Outcome) the solver loop in
+    # awgym.gym.problem is written against. Sibling brick, stdlib-only at import.
+    "awpredict>=0.1.0",
     "httpx>=0.27",
     "fastapi>=0.110",
     "uvicorn[standard]>=0.29",
