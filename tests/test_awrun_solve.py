@@ -36,7 +36,9 @@ def test_queued_solve_item_is_claimed_played_and_journaled(tmp_path: Path):
     store = RunStore(tmp_path / "awrun")
     item = store.submit(SOLVE_KIND, {"spec": _toy_spec(), "baseline": 0.0,
                                      "policy": "const", "const_action": 1,
-                                     "journal_root": str(tmp_path / "solve")})
+                                     "journal_root": str(tmp_path / "solve")},
+                        # solve is a GPU kind: awrun refuses a submit with no gpu request
+                        gpu={"class": "arc", "vram_mb": 4096})
     done = dispatch_once(store, worker_id="t", run_fns={SOLVE_KIND: run_solve})
     assert done is not None and done.id == item.id
     assert done.status == "done", done.result
