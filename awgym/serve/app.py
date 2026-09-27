@@ -8,7 +8,7 @@ It carries ARC_GYM_LEWM_TOKEN from its env for writes.
 Genesis proxies verbatim to this service (the idle_jobs_proxy pattern: the
 loop never runs inside genesis' request process). The service is
 container-hosted on the fleet network; it reaches LeWM in-network
-(https://aitheros-world-model:8197) with the internal CA — the same path the
+(the address in ARC_GYM_LEWM_BASE) with the internal CA — the same path the
 live playground uses. It carries ARC_GYM_LEWM_TOKEN from its env for writes.
 
 Endpoints mirror what the portal panel and MCP tools consume:

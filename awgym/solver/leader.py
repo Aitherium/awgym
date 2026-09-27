@@ -31,9 +31,10 @@ from .workspace import RunWorkspace
 
 log = logging.getLogger("awgym.solver")
 
-_MS_URL = os.environ.get(
-    "ARC_GYM_LEADER_LLM",
-    "https://aitheros-microscheduler:8150/v1/chat/completions")
+# The OpenAI-compatible chat-completions URL the leader calls. No default: the
+# address is deployment-specific; its absence fails loudly in _leader_call.
+LEADER_LLM_ENV = "ARC_GYM_LEADER_LLM"
+_MS_URL = os.environ.get(LEADER_LLM_ENV, "")
 # No default, and that is the point: the value that lived here was one of OUR
 # serving names, and this package ships to PyPI. A published brick must not
 # advertise which models we run (AWM005) -- it is not a credential, it is the
@@ -60,6 +61,11 @@ def _leader_call(system: str, context: str, timeout: float = 300.0) -> str:
     """One leader LLM call through MicroScheduler (fail-closed)."""
     if not _INTERNAL_KEY:
         raise RuntimeError("AITHER_INTERNAL_SECRET unset — leader LLM refused")
+    if not _MS_URL:
+        raise RuntimeError(
+            f"{LEADER_LLM_ENV} unset — leader LLM refused. Set it to your "
+            "chat-completions URL; there is no default."
+        )
     if not _LEADER_MODEL:
         raise RuntimeError(
             "ARC_GYM_LEADER_MODEL unset — leader LLM refused. Set it to the "

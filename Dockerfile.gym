@@ -37,6 +37,8 @@ RUN pip install --no-cache-dir /app/dream-team && \
 ENV ARC_GYM_DREAMTEAM_ROOT=/app/dream-team \
     ARC_GYM_LEWM_BASE=https://aitheros-world-model:8197 \
     ARC_GYM_LEWM_CA=/etc/tls/ca-bundle.pem \
+    ARC_GYM_SCORE_URL=https://aitheros-gym:8199/gym/score-run \
+    ARC_GYM_LEADER_LLM=https://aitheros-microscheduler:8150/v1/chat/completions \
     PYTHONIOENCODING=utf-8
 
 EXPOSE 8199

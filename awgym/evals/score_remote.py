@@ -23,8 +23,10 @@ import sys
 
 import httpx
 
-_GYM_URL = os.environ.get("ARC_GYM_SCORE_URL",
-                          "https://aitheros-gym:8199/gym/score-run")
+#: The gym service's score-run endpoint, e.g. ``https://<gym-host>:8199/gym/score-run``.
+#: No default: the address is deployment-specific, and a guessed one would read
+#: as an unreachable (DEAD) scorer rather than a missing setting.
+SCORE_URL_ENV = "ARC_GYM_SCORE_URL"
 _CA_CANDIDATES = (
     "SSL_CERT_FILE",
     "/app/AitherOS/Library/Data/tls/combined-ca-bundle.pem",
@@ -47,8 +49,13 @@ def main() -> int:
     if not key:
         print("DEAD: no AITHER_INTERNAL_SECRET in the driving container's env")
         return 2
+    gym_url = os.environ.get(SCORE_URL_ENV, "").strip()
+    if not gym_url:
+        print(f"DEAD: {SCORE_URL_ENV} is unset -- set it to the gym service's "
+              "/gym/score-run URL")
+        return 2
     try:
-        r = httpx.post(_GYM_URL,
+        r = httpx.post(gym_url,
                        headers={"X-Internal-Token": key},
                        verify=_ca(), timeout=180)
         r.raise_for_status()

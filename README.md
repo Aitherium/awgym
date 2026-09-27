@@ -39,6 +39,19 @@ The dream-team source (Apache-2.0, NOTICE retained) lives OUTSIDE this package
 at `ARC_GYM_DREAMTEAM_ROOT` (default `E:\AitherOS-Data\arc-agi-3\dream-team`);
 this package never carries it.
 
+## Addresses come from the environment
+
+The package ships no service addresses. Set the ones the commands you run need:
+
+| variable | used by | value |
+|---|---|---|
+| `ARC_GYM_LEWM_BASE` | `awgym serve`, the CLI | the LeWM world-model base URL |
+| `ARC_GYM_SCORE_URL` | `python -m awgym.evals.score_remote` | the gym service's `/gym/score-run` URL |
+| `ARC_GYM_LEADER_LLM` | `awgym solve` | an OpenAI-compatible `/v1/chat/completions` URL |
+| `ARC_GYM_LEADER_MODEL` | `awgym solve` | the model name that endpoint serves |
+
+Unset, each command refuses with a message naming the variable (the scorer exits 2).
+
 ## Development
 
 ```bash
