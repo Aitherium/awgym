@@ -145,6 +145,14 @@ def main(argv: Optional[list[str]] = None) -> int:
     except ImportError as exc:
         print(f"DEAD: awrun not importable ({exc}); pip install awrun", file=sys.stderr)
         return 2
+    try:
+        # Host hooks, the GPU lease client among them: `solve` is a GPU kind, and
+        # without the host's client the door is asked with no credentials.
+        from awrun.cli import _register_capacity_provider
+        _register_capacity_provider()
+    except ImportError as exc:  # an older awrun: the built-in lease client is used
+        print(f"awgym solve: no host hooks ({exc}); using awrun's built-in lease client",
+              file=sys.stderr)
     if args.journal_root:
         os.environ[SOLVE_ROOT_ENV] = args.journal_root
     store = RunStore(Path(args.root)) if args.root else RunStore()
