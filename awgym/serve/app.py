@@ -62,7 +62,7 @@ def _require_internal_key(x_internal_key: Optional[str] = None,
 
 
 def create_app(base: Optional[str] = None, ca: Optional[str] = None) -> FastAPI:
-    app = FastAPI(title="awgym", version="0.1.0")
+    app = FastAPI(title="awgym", version="0.1.1")
     client = LeWMClient(base=base, ca=ca)
     trainer = Trainer(client=client)
 

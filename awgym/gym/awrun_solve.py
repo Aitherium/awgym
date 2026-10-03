@@ -75,11 +75,66 @@ def _policy_from(item_spec: dict):
     raise ProblemError(f"unknown policy {name!r} (random|const|layered)")
 
 
+HARNESS_EXPORTER_ENV = "AWGYM_HARNESS_EXPORTER"          # "module:function"
+HARNESS_EXPORTER_PATH_ENV = "AWGYM_HARNESS_EXPORTER_SYSPATH"  # dir to import it from
+_FLEET_SOLVE_PREFIX = "/data/solve/"
+
+
+def _export_harness(name: str, target: Path) -> Optional[str]:
+    """Ask the host's exporter to write `target`. None on success, else why not."""
+    ref = os.environ.get(HARNESS_EXPORTER_ENV, "").strip()
+    if not ref or ":" not in ref:
+        return f"no {HARNESS_EXPORTER_ENV} (module:function) to export it"
+    extra = os.environ.get(HARNESS_EXPORTER_PATH_ENV, "").strip()
+    if extra and extra not in sys.path:
+        sys.path.insert(0, extra)
+    module_name, _, func = ref.partition(":")
+    try:
+        import importlib
+
+        target.parent.mkdir(parents=True, exist_ok=True)
+        getattr(importlib.import_module(module_name), func)(name, target)
+    except Exception as exc:  # noqa: BLE001 - reported in the item's REFUSED message
+        return f"exporter {ref} failed: {type(exc).__name__}: {exc}"
+    return None
+
+
+def _localize_harness(spec: dict, solve_root: Path) -> Optional[str]:
+    """Make a `harness` problem's file exist where THIS worker can read it.
+
+    `config/solve_problems.yaml` names fleet paths (`/data/solve/...`). A worker that
+    is not in the fleet -- the host worker -- cannot read them, so such a path maps
+    under this worker's solve root, and a file still missing is exported on first use.
+    Rewrites `spec` in place; returns a reason when it could not.
+    """
+    if spec.get("domain") != "harness":
+        return None
+    for kw_name in ("adapter_kwargs", "scorer_kwargs"):
+        kwargs = spec.get(kw_name)
+        if not isinstance(kwargs, dict) or not isinstance(kwargs.get("harness"), str):
+            continue
+        given = kwargs["harness"]
+        if Path(given).exists():
+            continue
+        posix = given.replace("\\", "/")
+        local = (solve_root / posix[len(_FLEET_SOLVE_PREFIX):]
+                 if posix.startswith(_FLEET_SOLVE_PREFIX) else Path(given))
+        if not local.exists():
+            why = _export_harness(Path(posix).stem, local)
+            if why or not local.exists():
+                return f"harness file {given} is missing here ({local}): {why or 'not written'}"
+        kwargs["harness"] = str(local)
+    return None
+
+
 def run_solve(item: Any, *, run_root: Optional[Path] = None) -> Tuple[int, str]:
     """The awrun RunFn for kind `solve`. Never raises: a defect is a code-2 message."""
     raw = getattr(item, "spec", None) or {}
     if not isinstance(raw, dict) or not isinstance(raw.get("spec"), dict):
         return 2, "solve item needs spec.spec = ProblemSpec dict"
+    why = _localize_harness(raw["spec"], _journal_root(raw, run_root))
+    if why:
+        return 2, f"REFUSED: {why}"
     try:
         spec = ProblemSpec.from_dict(raw["spec"])
     except (TypeError, ValueError) as exc:

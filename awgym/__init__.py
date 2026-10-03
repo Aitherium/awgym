@@ -14,4 +14,4 @@ this package at ``ARC_GYM_DREAMTEAM_ROOT`` (default
 ``E:\\AitherOS-Data\\arc-agi-3\\dream-team``); this package never carries it.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
