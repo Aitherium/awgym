@@ -55,7 +55,11 @@ def test_sequence_policy_plays_then_falls_back() -> None:
     assert all(0 <= a <= 7 for a in got[3:])
 
 
-def test_workspace_layout_and_files() -> None:
+def test_workspace_layout_and_files(tmp_path, monkeypatch) -> None:
+    # Hermetic: the package's default data root is a host path, and a test
+    # must never write to a real data root -- on a hosted windows runner the
+    # default's drive does not even exist (FileNotFoundError, 2026-10-07).
+    monkeypatch.setenv("ARC_GYM_DATA_ROOT", str(tmp_path))
     ws = RunWorkspace(game_id="testgame", run_id="testrun")
     assert ws.root.name.endswith("testrun")
     assert ws.root.parent.parent.name == "testgame"
