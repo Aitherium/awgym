@@ -290,13 +290,121 @@ def compose(steps: List[Callable[..., Any]], fallback: Policy,
     return policy
 
 
+class _MCTSView:
+    """Adapt an ``EnvironmentAdapter`` (e.g. ``awscreen.env:ScreenEnv``) to MCTS.
+
+    The required adapter interface is ``actions()``, ``get_state_hash()``, ``clone()``,
+    ``evaluate()`` and a 4-tuple ``step()`` -- every one of them is called here
+    unconditionally, so an adapter missing any of them raises inside ``search``.
+    (``ScreenEnv`` defines all five.) UnifiedMCTS wants ``get_actions()`` and a 3-tuple,
+    so the adapter is translated here rather than taught two dialects. No import of
+    either side -- the seam is structural, which is why this works for any adapter, not
+    just ScreenEnv.
+    """
+
+    def __init__(self, env: Any) -> None:
+        self._env = env
+
+    def get_state_hash(self) -> int:
+        return int(self._env.get_state_hash())
+
+    def get_actions(self) -> List[Any]:
+        fn = getattr(self._env, "get_actions", None)
+        if callable(fn):
+            return list(fn())
+        return list(self._env.actions())
+
+    def step(self, action: Any) -> Tuple[Any, float, bool]:
+        out = self._env.step(action)
+        return out[0], float(out[1]), bool(out[2])
+
+    def evaluate(self) -> float:
+        return float(self._env.evaluate())
+
+    def clone(self) -> "_MCTSView":
+        return _MCTSView(self._env.clone())
+
+
+def _run_coro(coro: Any) -> Any:
+    """Await a coroutine from a sync policy, whether or not a loop is running."""
+    import asyncio
+    import threading
+
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    # Called from inside a running loop (the solver's async path): this policy cannot
+    # await, so the search runs in its own thread with its own loop and the caller
+    # waits. The tree is searched on clones, never on the live env.
+    box: Dict[str, Any] = {}
+
+    def _target() -> None:
+        try:
+            box["value"] = asyncio.run(coro)
+        except BaseException as exc:  # noqa: BLE001 - relayed to the caller below
+            box["error"] = exc
+
+    th = threading.Thread(target=_target, name="awgym-mcts", daemon=True)
+    th.start()
+    th.join()
+    if "error" in box:
+        raise box["error"]
+    return box.get("value")
+
+
+def mcts_policy(env: Any = None, *, engine: Any = None, env_factory: Any = None,
+                config: Any = None, iterations: int = 120,
+                time_limit: float = 2.0) -> Policy:
+    """A layer that answers with ``UnifiedMCTS.search(env.clone())``'s best action.
+
+    Works with ``awscreen.env:ScreenEnv`` through ``_MCTSView``. The unified engine is
+    imported lazily from ``lib.cognitive.UnifiedMCTS`` (monorepo) unless injected, so
+    this module stays importable from a PyPI install of awgym: a missing engine is a
+    REFUSAL (None), never a guess. ``engine`` is any object with ``async search(env)``;
+    the env is ``env``, ``env_factory()``, or ``session.adapter`` in that order.
+    """
+
+    def _env_for(session: Any) -> Any:
+        if env is not None:
+            return env
+        if env_factory is not None:
+            return env_factory()
+        return getattr(session, "adapter", None)
+
+    def policy(obs: Any, session: Any) -> Any:
+        target = _env_for(session)
+        if target is None:
+            return None
+        try:
+            eng = engine
+            if eng is None:
+                from lib.cognitive.UnifiedMCTS import MCTSConfig, UnifiedMCTS
+                eng = UnifiedMCTS(
+                    config if config is not None
+                    else MCTSConfig(iterations=int(iterations),
+                                    time_limit=float(time_limit)))
+            result = _run_coro(eng.search(_MCTSView(target.clone())))
+        except Exception as exc:  # noqa: BLE001 - an unavailable engine is a refusal
+            learn = getattr(session, "learn", None)
+            if callable(learn):
+                learn("policy", f"mcts unavailable ({type(exc).__name__})", 0.5)
+            return None
+        action = getattr(result, "best_action", None)
+        return action
+
+    policy.__name__ = "mcts"  # type: ignore[attr-defined]
+    return policy
+
+
 def load_policy(desc: dict, *, client: Any = None) -> Policy:
     """Build a policy from a queue-entry description (never free text).
 
     {"kind": "layered",
-     "layers": ["arc_ledger", "council", "wm_veto"],   # in order, first wins
+     "layers": ["arc_ledger", "council", "wm_veto", "mcts"],   # in order, first wins
      "council": {"url": ..., "model": ...},
      "wm": <object or None>,                            # operator-provided
+     "env": <adapter or None>, "engine": <UnifiedMCTS or None>,   # mcts layer
      "fallback": "random" | "const" | {"const": <action>}}
 
     Unknown kinds/layers raise ValueError -- a malformed policy description
@@ -326,8 +434,16 @@ def load_policy(desc: dict, *, client: Any = None) -> Policy:
             if inner is None:
                 raise ValueError("wm_veto must follow a layer it can veto")
             steps.append(wm_veto_policy(wm, inner))
+        elif name == "mcts":
+            m = desc.get("mcts") or {}
+            steps.append(mcts_policy(
+                desc.get("env"), engine=desc.get("engine"),
+                env_factory=desc.get("env_factory"), config=m.get("config"),
+                iterations=int(m.get("iterations", 120)),
+                time_limit=float(m.get("time_limit", 2.0))))
         else:
-            raise ValueError(f"unknown layer {name!r} (arc_ledger|council|wm_veto)")
+            raise ValueError(f"unknown layer {name!r} "
+                             f"(arc_ledger|council|wm_veto|mcts)")
     fb = desc.get("fallback") or {}
     if isinstance(fb, str):
         fallback = (_random_fallback(None) if fb == "random"

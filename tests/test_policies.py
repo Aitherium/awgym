@@ -22,6 +22,7 @@ from awgym.gym.policies import (  # noqa: E402
     council_policy,
     failed_opening_actions,
     load_policy,
+    mcts_policy,
     prior_rows,
     recall_facts,
     wm_veto_policy,
@@ -251,3 +252,83 @@ def test_arc_ledger_layer_skips_tried_openings(session):
             "fallback": {"kind": "random"}}
     policy = load_policy(desc)
     assert policy({"grid": [[0]]}, session) in VALID
+
+
+_SCREEN_STATE = {
+    "schema": "awscreen.screen_state/1",
+    "frame": {"path": "synthetic.png", "width": 1200, "height": 800, "origin": [0, 0],
+              "capture": "file", "signature": None, "sha256": ""},
+    "elements": [
+        {"id": "e1", "region_id": None, "bbox": [100, 100, 200, 140],
+         "bbox_image": [100, 100, 200, 140], "label": "save", "text": "Save",
+         "role": "button", "confidence": 0.9, "source": "cv", "sources": ["cv"],
+         "interactable": True, "status": "ok"},
+    ],
+}
+
+
+def test_mcts_policy_searches_a_synthetic_screen_and_returns_its_action(monkeypatch):
+    """The mcts layer runs UnifiedMCTS.search(env.clone()) over awscreen's ScreenEnv.
+
+    The engine is injected (awgym ships to PyPI and never imports the monorepo at import
+    time); what is proven here is the seam: a clone is searched, get_actions() is
+    translated from ScreenEnv.actions(), and its best_action is the policy's answer.
+    """
+    _ws = Path(__file__).resolve().parents[2] / "awscreen"
+    if _ws.is_dir() and str(_ws) not in sys.path:
+        sys.path.insert(0, str(_ws))
+    envmod = pytest.importorskip("awscreen.env")
+
+    env = envmod.ScreenEnv(state=_SCREEN_STATE, goal_label="save")
+    cloned = {}
+    real_clone = env.clone
+
+    def clone():
+        cloned["yes"] = True
+        return real_clone()
+
+    env.clone = clone
+    seen = {}
+
+    class Engine:
+        async def search(self, view):
+            seen["actions"] = view.get_actions()
+            seen["hash"] = view.get_state_hash()
+            return SimpleNamespace(best_action={
+                "kind": "click", "element_id": "e1", "xy": [150, 120]})
+
+    session = SimpleNamespace(learn=lambda *a, **k: None)
+    policy = mcts_policy(env=env, engine=Engine())
+    action = policy("obs", session)
+
+    assert cloned.get("yes") is True                       # searched a clone, not the env
+    assert action == {"kind": "click", "element_id": "e1", "xy": [150, 120]}
+    assert any(a.get("kind") == "click" for a in seen["actions"])
+    assert isinstance(seen["hash"], int)
+
+
+def test_mcts_policy_without_a_working_engine_is_a_refusal():
+    """A broken/absent engine = None (a refusal, journaled), never a guessed action."""
+    learned = []
+
+    class Env:
+        def get_state_hash(self):
+            return 1
+
+        def actions(self):
+            return [0, 1]
+
+        def evaluate(self):
+            return 0.0
+
+        def clone(self):
+            return self
+
+    class Boom:
+        async def search(self, view):
+            raise RuntimeError("no engine")
+
+    session = SimpleNamespace(adapter=Env(),
+                              learn=lambda *a, **k: learned.append(a))
+    assert mcts_policy(env=None, engine=Boom())(("obs"), session) is None
+    assert learned and "mcts unavailable" in learned[0][1]
